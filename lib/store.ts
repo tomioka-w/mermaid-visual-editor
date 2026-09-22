@@ -77,6 +77,17 @@ type Snapshot = {
 const MAX_HISTORY = 50;
 let nodeCounter = 1;
 
+// React Flow requires parent nodes to appear before their children.
+// Keeping every subgraph first also covers nodes that are grouped after creation.
+function orderSubgraphsFirst(
+  nodes: Node<FlowNodeData>[],
+): Node<FlowNodeData>[] {
+  return [
+    ...nodes.filter((node) => node.data.isSubgraph),
+    ...nodes.filter((node) => !node.data.isSubgraph),
+  ];
+}
+
 // ─── Store interface ──────────────────────────────────────────────────────────
 interface FlowState {
   nodes: Node<FlowNodeData>[];
@@ -343,7 +354,7 @@ export const useFlowStore = create<FlowState>((set, get) => {
     }),
 
     setNodes: withHistory((nodes) => {
-      set({ nodes });
+      set({ nodes: orderSubgraphsFirst(nodes) });
     }),
 
     loadDiagram: withHistory((nodes, edges) => {
@@ -352,7 +363,7 @@ export const useFlowStore = create<FlowState>((set, get) => {
         ...e,
         type: "flowEdge",
       })) as Edge<FlowEdgeData>[];
-      set({ nodes: stampedNodes, edges: stampedEdges });
+      set({ nodes: orderSubgraphsFirst(stampedNodes), edges: stampedEdges });
     }),
 
     importDiagram: withHistory((nodes, edges, settings) => {
@@ -368,7 +379,7 @@ export const useFlowStore = create<FlowState>((set, get) => {
       }, 0)
       if (maxId >= nodeCounter) nodeCounter = maxId + 1
       set({
-        nodes: stampedNodes,
+        nodes: orderSubgraphsFirst(stampedNodes),
         edges: stampedEdges,
         direction: settings.direction,
         theme: settings.theme,
@@ -388,30 +399,29 @@ export const useFlowStore = create<FlowState>((set, get) => {
         style: { width: 320, height: 220 },
         zIndex: -1,
       };
-      set({ nodes: [...get().nodes, newNode] });
+      set({ nodes: [newNode, ...get().nodes] });
     }),
 
     assignToSubgraph: withHistory((nodeIds, subgraphId) => {
       const { nodes } = get();
-      set({
-        nodes: nodes.map((n) => {
-          if (!nodeIds.includes(n.id)) return n;
-          if (subgraphId === null) {
-            // Remove from subgraph: restore absolute position
-            const parent = n.parentId ? nodes.find((p) => p.id === n.parentId) : null;
-            const absPos = parent
-              ? { x: parent.position.x + n.position.x, y: parent.position.y + n.position.y }
-              : n.position;
-            return { ...n, parentId: undefined, extent: undefined, position: absPos };
-          }
-          // Assign to subgraph: convert to relative position
-          const parent = nodes.find((p) => p.id === subgraphId);
-          const relPos = parent
-            ? { x: n.position.x - parent.position.x, y: n.position.y - parent.position.y }
+      const updatedNodes = nodes.map((n) => {
+        if (!nodeIds.includes(n.id)) return n;
+        if (subgraphId === null) {
+          // Remove from subgraph: restore absolute position
+          const parent = n.parentId ? nodes.find((p) => p.id === n.parentId) : null;
+          const absPos = parent
+            ? { x: parent.position.x + n.position.x, y: parent.position.y + n.position.y }
             : n.position;
-          return { ...n, parentId: subgraphId, position: relPos };
-        }),
+          return { ...n, parentId: undefined, extent: undefined, position: absPos };
+        }
+        // Assign to subgraph: convert to relative position
+        const parent = nodes.find((p) => p.id === subgraphId);
+        const relPos = parent
+          ? { x: n.position.x - parent.position.x, y: n.position.y - parent.position.y }
+          : n.position;
+        return { ...n, parentId: subgraphId, position: relPos };
       });
+      set({ nodes: orderSubgraphsFirst(updatedNodes) });
     }),
 
     updateSubgraphDirection: withHistory((id, direction) => {

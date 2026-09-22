@@ -30,7 +30,7 @@ function CanvasInner({ onOpenPalette }: CanvasInnerProps) {
     pushHistory, assignToSubgraph,
     drawingShape, setDrawingShape,
   } = useFlowStore()
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, getIntersectingNodes } = useReactFlow()
 
   // ── Draw-mode state ─────────────────────────────────────────────────────────
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
@@ -174,60 +174,48 @@ function CanvasInner({ onOpenPalette }: CanvasInnerProps) {
     (_event: MouseEvent, draggedNode: Node<FlowNodeData>) => {
       pushHistory()
       const allNodes = useFlowStore.getState().nodes
+      const currentNode = allNodes.find((node) => node.id === draggedNode.id) ?? draggedNode
 
       // Group dragged onto free nodes — auto-assign nodes now inside it
-      if (draggedNode.data.isSubgraph) {
-        const sgW = typeof draggedNode.style?.width === 'number' ? draggedNode.style.width : 320
-        const sgH = typeof draggedNode.style?.height === 'number' ? draggedNode.style.height : 220
-        const freeNodes = allNodes.filter((n) => !n.data.isSubgraph && !n.parentId)
-        const toAssign = freeNodes.filter((n) => {
-          const nw = n.measured?.width ?? 150
-          const nh = n.measured?.height ?? 60
-          const cx = n.position.x + nw / 2
-          const cy = n.position.y + nh / 2
-          return (
-            cx >= draggedNode.position.x && cx <= draggedNode.position.x + sgW &&
-            cy >= draggedNode.position.y && cy <= draggedNode.position.y + sgH
-          )
-        })
+      if (currentNode.data.isSubgraph) {
+        const toAssign = getIntersectingNodes(
+          { id: currentNode.id },
+          false,
+          allNodes,
+        ).filter((node) => !node.data.isSubgraph && !node.parentId)
         if (toAssign.length > 0) assignToSubgraph(toAssign.map((n) => n.id), draggedNode.id)
         return
       }
 
-      const w = draggedNode.measured?.width ?? 150
-      const h = draggedNode.measured?.height ?? 60
+      const w = currentNode.measured?.width ?? 150
+      const h = currentNode.measured?.height ?? 60
 
       // Node already in a group — check if it was dragged outside
-      if (draggedNode.parentId) {
-        const parent = allNodes.find((n) => n.id === draggedNode.parentId)
+      if (currentNode.parentId) {
+        const parent = allNodes.find((n) => n.id === currentNode.parentId)
         if (parent) {
           const sgW = typeof parent.style?.width === 'number' ? parent.style.width : 320
           const sgH = typeof parent.style?.height === 'number' ? parent.style.height : 220
-          const cx = draggedNode.position.x + w / 2
-          const cy = draggedNode.position.y + h / 2
+          const cx = currentNode.position.x + w / 2
+          const cy = currentNode.position.y + h / 2
           if (cx < 0 || cx > sgW || cy < 0 || cy > sgH) {
-            assignToSubgraph([draggedNode.id], null)
+            assignToSubgraph([currentNode.id], null)
           }
         }
         return
       }
 
       // Free node — check if dropped inside a group
-      const subgraphs = allNodes.filter((n) => n.data.isSubgraph)
-      if (subgraphs.length === 0) return
-      const cx = draggedNode.position.x + w / 2
-      const cy = draggedNode.position.y + h / 2
-      for (const sg of subgraphs) {
-        const sgW = typeof sg.style?.width === 'number' ? sg.style.width : 320
-        const sgH = typeof sg.style?.height === 'number' ? sg.style.height : 220
-        if (cx >= sg.position.x && cx <= sg.position.x + sgW &&
-            cy >= sg.position.y && cy <= sg.position.y + sgH) {
-          assignToSubgraph([draggedNode.id], sg.id)
-          return
-        }
+      const subgraph = getIntersectingNodes(
+        { id: currentNode.id },
+        true,
+        allNodes,
+      ).find((node) => node.data.isSubgraph)
+      if (subgraph) {
+        assignToSubgraph([currentNode.id], subgraph.id)
       }
     },
-    [pushHistory, assignToSubgraph]
+    [pushHistory, assignToSubgraph, getIntersectingNodes]
   )
 
   const previewRect =

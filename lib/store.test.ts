@@ -58,3 +58,40 @@ test('useFlowStore withHistory - no change', () => {
   assert.strictEqual(newState.past.length, 0)
   assert.strictEqual(newState.nodes.length, 0)
 })
+
+test('assignToSubgraph keeps the parent before an existing child', () => {
+  useFlowStore.setState({
+    nodes: [
+      {
+        id: 'existing-node',
+        type: 'flowNode',
+        position: { x: 260, y: 220 },
+        data: { label: 'Existing', shape: 'rectangle' },
+      },
+      {
+        id: 'group',
+        type: 'flowNode',
+        position: { x: 200, y: 150 },
+        data: { label: 'Group', shape: 'rectangle', isSubgraph: true },
+        style: { width: 320, height: 220 },
+      },
+    ],
+    edges: [],
+    past: [],
+    future: [],
+  })
+
+  useFlowStore.getState().assignToSubgraph(['existing-node'], 'group')
+
+  const grouped = useFlowStore.getState().nodes
+  assert.strictEqual(grouped[0].id, 'group')
+  assert.strictEqual(grouped[1].parentId, 'group')
+  assert.deepStrictEqual(grouped[1].position, { x: 60, y: 70 })
+
+  useFlowStore.getState().assignToSubgraph(['existing-node'], null)
+
+  const ungrouped = useFlowStore.getState().nodes
+  const existing = ungrouped.find((node) => node.id === 'existing-node')
+  assert.strictEqual(existing?.parentId, undefined)
+  assert.deepStrictEqual(existing?.position, { x: 260, y: 220 })
+})
