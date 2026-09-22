@@ -41,7 +41,10 @@ function CanvasInner({ onOpenPalette }: CanvasInnerProps) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+      const isTyping =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
 
       // Escape → cancel draw mode
       if (e.key === 'Escape') {
@@ -51,8 +54,11 @@ function CanvasInner({ onOpenPalette }: CanvasInnerProps) {
         return
       }
 
+      // Preserve native copy/paste/undo and typing shortcuts in form controls.
+      if (isTyping) return
+
       // N → add node (when not typing)
-      if (!isTyping && (e.key === 'n' || e.key === 'N')) {
+      if (e.key === 'n' || e.key === 'N') {
         addNode()
         return
       }
