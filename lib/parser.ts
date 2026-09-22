@@ -10,7 +10,7 @@ import type {
   NodeShape,
   Theme,
 } from './store'
-import { applyDagreLayout } from './layout'
+import { applyDagreLayout } from './layout.ts'
 
 // ─── Public result type ───────────────────────────────────────────────────────
 
@@ -306,23 +306,35 @@ export function parseMermaidFlowchart(syntax: string): ParseResult {
     let curveStyle: CurveStyle = 'basis'
     let foundHeader = false
     let currentSubgraphId: string | null = null
+    let subgraphCounter = 1
     let edgeIdx = 0
 
     const nodesMap = new Map<string, Node<FlowNodeData>>()
     const edges: Edge<FlowEdgeData>[] = []
     const pendingStyles = new Map<string, Partial<Pick<FlowNodeData, 'fillColor' | 'strokeColor' | 'textColor'>>>()
     const pendingLinkStyles = new Map<number, string>()
+    const subgraphAliases = new Map<string, string>()
 
     // Helper to register a node from a NodeRef
     const registerNode = (ref: NodeRef) => {
-      if (!nodesMap.has(ref.id)) {
-        const node = makeNode(ref.id, ref.label, ref.shape)
-        if (currentSubgraphId) {
-          node.parentId = currentSubgraphId
-          node.extent = 'parent'
+      const existing = nodesMap.get(ref.id)
+      if (existing) {
+        if (currentSubgraphId && !existing.data.isSubgraph && !existing.parentId) {
+          nodesMap.set(ref.id, {
+            ...existing,
+            parentId: currentSubgraphId,
+            extent: 'parent',
+          })
         }
-        nodesMap.set(ref.id, node)
+        return
       }
+
+      const node = makeNode(ref.id, ref.label, ref.shape)
+      if (currentSubgraphId) {
+        node.parentId = currentSubgraphId
+        node.extent = 'parent'
+      }
+      nodesMap.set(ref.id, node)
     }
 
     for (const line of lines) {
@@ -359,14 +371,32 @@ export function parseMermaidFlowchart(syntax: string): ParseResult {
 
       // ── Subgraph block
       if (line.startsWith('subgraph ')) {
-        const m = line.match(/^subgraph\s+(\w+)(?:\s+\["?([^"\]]*)"?\])?/)
-        if (m) {
-          currentSubgraphId = m[1]
-          const label = m[2] ?? m[1]
+        const declaration = line.slice('subgraph '.length).trim()
+        const explicit = declaration.match(/^([A-Za-z_][\w-]*)\s+\[\s*"?([^"\]]*)"?\s*\]$/)
+        const isSimpleId = /^[A-Za-z_][\w-]*$/.test(declaration)
+        const id = explicit?.[1] ?? (isSimpleId ? declaration : `subgraph_${subgraphCounter++}`)
+        const label = explicit?.[2] ?? declaration.replace(/^"|"$/g, '')
+
+        if (label) {
+          currentSubgraphId = id
+          subgraphAliases.set(id, id)
+          subgraphAliases.set(label, id)
           nodesMap.set(currentSubgraphId, {
             ...makeNode(currentSubgraphId, label),
             data: { label, shape: 'rectangle', isSubgraph: true },
             zIndex: -1,
+          })
+        }
+        continue
+      }
+
+      if (currentSubgraphId && line.startsWith('direction ')) {
+        const m = line.match(/^direction\s+(TD|LR|BT|RL)$/)
+        const subgraph = nodesMap.get(currentSubgraphId)
+        if (m && subgraph) {
+          nodesMap.set(currentSubgraphId, {
+            ...subgraph,
+            data: { ...subgraph.data, subgraphDirection: m[1] as Direction },
           })
         }
         continue
@@ -379,9 +409,10 @@ export function parseMermaidFlowchart(syntax: string): ParseResult {
 
       // ── style line
       if (line.startsWith('style ')) {
-        const m = line.match(/^style\s+(\w+)\s+(.+)$/)
+        const m = line.match(/^style\s+(\S+)\s+(.+)$/)
         if (m) {
-          const [, nodeId, stylePart] = m
+          const [, rawNodeId, stylePart] = m
+          const nodeId = subgraphAliases.get(rawNodeId) ?? rawNodeId
           const s: Partial<Pick<FlowNodeData, 'fillColor' | 'strokeColor' | 'textColor'>> = {}
           for (const part of stylePart.split(',')) {
             const sep = part.indexOf(':')

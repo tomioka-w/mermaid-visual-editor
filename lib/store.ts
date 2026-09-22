@@ -59,6 +59,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   strokeColor?: string;
   textColor?: string;
   isSubgraph?: boolean;
+  subgraphDirection?: Direction;
 }
 
 export interface FlowEdgeData extends Record<string, unknown> {
@@ -122,6 +123,7 @@ interface FlowState {
   // Subgraph operations
   addSubgraph: (title?: string) => void;
   assignToSubgraph: (nodeIds: string[], subgraphId: string | null) => void;
+  updateSubgraphDirection: (id: string, direction?: Direction) => void;
 
   // Edge operations
   updateEdgeLabel: (id: string, label: string) => void;
@@ -409,6 +411,16 @@ export const useFlowStore = create<FlowState>((set, get) => {
             : n.position;
           return { ...n, parentId: subgraphId, position: relPos };
         }),
+      });
+    }),
+
+    updateSubgraphDirection: withHistory((id, direction) => {
+      set({
+        nodes: get().nodes.map((n) =>
+          n.id === id && n.data.isSubgraph
+            ? { ...n, data: { ...n.data, subgraphDirection: direction } }
+            : n,
+        ),
       });
     }),
 

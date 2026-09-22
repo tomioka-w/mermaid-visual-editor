@@ -1,7 +1,13 @@
 'use client'
 
 import { useShallow } from 'zustand/react/shallow'
-import { useFlowStore, type EdgeStyle, type ArrowType, type FlowEdgeData } from '@/lib/store'
+import {
+  useFlowStore,
+  type ArrowType,
+  type Direction,
+  type EdgeStyle,
+  type FlowEdgeData,
+} from '@/lib/store'
 
 const NEU_BG = 'var(--neu-bg)'
 
@@ -102,10 +108,11 @@ function ColorSwatch({
 }
 
 export function ObjectSettingsSection() {
-  const { updateNodeStyle, updateEdgeType } = useFlowStore(
+  const { updateNodeStyle, updateEdgeType, updateSubgraphDirection } = useFlowStore(
     useShallow((s) => ({
       updateNodeStyle: s.updateNodeStyle,
       updateEdgeType: s.updateEdgeType,
+      updateSubgraphDirection: s.updateSubgraphDirection,
     }))
   )
 
@@ -114,6 +121,7 @@ export function ObjectSettingsSection() {
 
   const hasNodeSelection = selectedNodes.length > 0
   const hasEdgeSelection = selectedEdges.length > 0
+  const selectedSubgraphs = selectedNodes.filter((n) => n.data.isSubgraph)
 
   const firstEdgeData = hasEdgeSelection ? (selectedEdges[0].data as FlowEdgeData | undefined) : undefined
   const activeEdgeStyle = firstEdgeData?.edgeStyle ?? 'solid'
@@ -196,6 +204,36 @@ export function ObjectSettingsSection() {
               onChange={(color) => selectedNodes.forEach((n) => updateNodeStyle(n.id, { textColor: color }))}
             />
           </div>
+
+          {selectedSubgraphs.length > 0 && (
+            <>
+              <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 6 }}>
+                Subgraph direction
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                {(
+                  [
+                    { direction: undefined, label: 'Auto' },
+                    { direction: 'TD', label: '↓' },
+                    { direction: 'LR', label: '→' },
+                    { direction: 'BT', label: '↑' },
+                    { direction: 'RL', label: '←' },
+                  ] as { direction?: Direction; label: string }[]
+                ).map(({ direction, label }) => (
+                  <NeuBtn
+                    key={direction ?? 'auto'}
+                    onClick={() => selectedSubgraphs.forEach((n) =>
+                      updateSubgraphDirection(n.id, direction)
+                    )}
+                    active={selectedSubgraphs[0].data.subgraphDirection === direction}
+                    title={direction ? `Subgraph ${direction}` : 'Use automatic subgraph direction'}
+                  >
+                    {label}
+                  </NeuBtn>
+                ))}
+              </div>
+            </>
+          )}
 
           <NeuBtn
             onClick={() => selectedNodes.forEach((n) =>

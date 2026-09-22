@@ -127,6 +127,9 @@ export function serialize(
     const sgId = sanitizeId(sg.id)
     const sgLabel = escapeLabel(sg.data.label || sg.id)
     lines.push(`  subgraph ${sgId} ["${sgLabel}"]`)
+    if (sg.data.subgraphDirection) {
+      lines.push(`    direction ${sg.data.subgraphDirection}`)
+    }
     const children = childNodes.filter((c) => c.parentId === sg.id)
     for (const child of children) {
       const shape = (child.data.shape ?? 'rectangle') as NodeShape
@@ -137,7 +140,7 @@ export function serialize(
   }
 
   // ── Node styles (only for custom-coloured nodes) ──────────────────────────
-  for (const node of nodes.filter((n) => !n.data.isSubgraph)) {
+  for (const node of nodes) {
     const parts: string[] = []
     if (node.data.fillColor) parts.push(`fill:${node.data.fillColor}`)
     if (node.data.strokeColor) parts.push(`stroke:${node.data.strokeColor}`)

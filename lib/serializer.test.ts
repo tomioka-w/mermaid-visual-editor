@@ -57,3 +57,32 @@ test('serialize default shape', () => {
   const output = serialize(nodes as any, [])
   assert.ok(output.includes('n_default["Default"]'))
 })
+
+test('serialize subgraph direction and styles', () => {
+  const nodes = [
+    {
+      id: 'sg_intake',
+      data: {
+        label: '摂取カロリー',
+        shape: 'rectangle',
+        isSubgraph: true,
+        subgraphDirection: 'LR',
+        fillColor: '#cccccc',
+      },
+      position: { x: 0, y: 0 },
+    },
+    {
+      id: 'meal',
+      parentId: 'sg_intake',
+      data: { label: '食事回数を減らす', shape: 'rectangle' },
+      position: { x: 20, y: 40 },
+    },
+  ]
+
+  const output = serialize(nodes as any, [])
+
+  assert.ok(output.includes('subgraph sg_intake ["摂取カロリー"]'))
+  assert.ok(output.includes('direction LR'))
+  assert.ok(output.includes('meal["食事回数を減らす"]'))
+  assert.ok(output.includes('style sg_intake fill:#cccccc'))
+})
